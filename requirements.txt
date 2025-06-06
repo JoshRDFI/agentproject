@@ -1,5 +1,6 @@
 # Core dependencies
-crewai>=0.28.0
+crewai
+crewai[tools]
 fastapi>=0.104.1
 uvicorn>=0.24.0
 python-multipart>=0.0.6
@@ -7,9 +8,15 @@ jinja2>=3.1.2
 aiofiles>=23.2.1
 websockets>=12.0
 
+# Search tools
+duckduckgo-search>=4.1.1
+
 # PDF processing
 pypdf2>=3.0.1
 pillow>=10.1.0
+git+https://github.com/huggingface/transformers
+accelerate
+qwen-vl-utils
 
 # Database
 psycopg2-binary>=2.9.9  # For PostgreSQL support (optional)

@@ -1,90 +1,438 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>CrewAI Web Interface</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrewAI Multi-Agent System</title>
     <style>
         body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
             padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
         }
-        .task-card {
+        h1, h2, h3 {
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .form-container {
+            flex: 1;
+            min-width: 300px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .results-container {
+            flex: 2;
+            min-width: 500px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
             margin-bottom: 15px;
         }
-        .status-running {
-            color: blue;
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
         }
-        .status-completed {
-            color: green;
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
         }
-        .status-failed {
-            color: red;
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .agent-interactions {
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #fff;
+        }
+        .interaction {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .agent-start {
+            background-color: #e6f7ff;
+            border-left: 3px solid #1890ff;
+        }
+        .agent-finish {
+            background-color: #f6ffed;
+            border-left: 3px solid #52c41a;
+        }
+        .agent-error {
+            background-color: #fff2f0;
+            border-left: 3px solid #ff4d4f;
+        }
+        .crew-start {
+            background-color: #f0f5ff;
+            border-left: 3px solid #2f54eb;
+        }
+        .crew-finish {
+            background-color: #f9f0ff;
+            border-left: 3px solid #722ed1;
+        }
+        .crew-error {
+            background-color: #fff0f6;
+            border-left: 3px solid #eb2f96;
+        }
+        .subtask-start {
+            background-color: #fcffe6;
+            border-left: 3px solid #a0d911;
+        }
+        .subtask-finish {
+            background-color: #fffbe6;
+            border-left: 3px solid #faad14;
+        }
+        .subtask-error {
+            background-color: #fff7e6;
+            border-left: 3px solid #fa8c16;
+        }
+        .task-completed {
+            background-color: #f6ffed;
+            border-left: 3px solid #52c41a;
+            font-weight: bold;
+        }
+        .timestamp {
+            font-size: 12px;
+            color: #888;
+        }
+        .collapsible {
+            background-color: #eee;
+            color: #444;
+            cursor: pointer;
+            padding: 18px;
+            width: 100%;
+            border: none;
+            text-align: left;
+            outline: none;
+            font-size: 15px;
+            margin-top: 10px;
+        }
+        .active, .collapsible:hover {
+            background-color: #ccc;
+        }
+        .content {
+            padding: 0 18px;
+            display: none;
+            overflow: hidden;
+            background-color: #f1f1f1;
+        }
+        .task-list {
+            margin-top: 20px;
+        }
+        .task-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .task-item:hover {
+            background-color: #f0f0f0;
+        }
+        .task-item.selected {
+            background-color: #e6f7ff;
+            border-left: 3px solid #1890ff;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,0.3);
+            border-radius: 50%;
+            border-top-color: #000;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
+    <h1>CrewAI Multi-Agent System</h1>
+    
     <div class="container">
-        <h1 class="mb-4">CrewAI Web Interface</h1>
-        
-        {% if message %}
-        <div class="alert alert-success">
-            {{ message }}
-        </div>
-        {% endif %}
-        
-        <div class="row">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Submit a Task</h2>
-                    </div>
-                    <div class="card-body">
-                        <form action="/submit_task" method="post" enctype="multipart/form-data">
-                            <div class="mb-3">
-                                <label for="task_description" class="form-label">Task Description:</label>
-                                <textarea class="form-control" id="task_description" name="task_description" rows="5" required></textarea>
-                            </div>
-                            <div class="mb-3">
-                                <label for="files" class="form-label">Upload PDF Files (Optional):</label>
-                                <input class="form-control" type="file" id="files" name="files" multiple accept=".pdf,application/pdf">
-                                <div class="form-text">You can upload multiple PDF files for the agents to analyze.</div>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Submit Task</button>
-                        </form>
-                    </div>
+        <div class="form-container">
+            <h2>Submit a Task</h2>
+            <form id="task-form">
+                <div class="form-group">
+                    <label for="topic">Topic:</label>
+                    <input type="text" id="topic" name="topic" required placeholder="Enter a topic to research">
                 </div>
+                
+                <div class="form-group">
+                    <label for="files">PDF Files (optional):</label>
+                    <input type="file" id="files" name="files" multiple accept=".pdf">
+                </div>
+                
+                <button type="submit">Submit Task</button>
+            </form>
+            
+            <div class="task-list">
+                <h3>Recent Tasks</h3>
+                <div id="task-list-container"></div>
+            </div>
+        </div>
+        
+        <div class="results-container">
+            <h2>Results</h2>
+            <div id="task-status">No task selected</div>
+            
+            <button type="button" class="collapsible">Agent Interactions</button>
+            <div class="content">
+                <div id="agent-interactions" class="agent-interactions"></div>
             </div>
             
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Recent Tasks</h2>
-                    </div>
-                    <div class="card-body">
-                        {% if tasks %}
-                            {% for task_id, task in tasks.items() %}
-                                <div class="card task-card">
-                                    <div class="card-body">
-                                        <h5 class="card-title">{{ task.description[:50] }}{% if task.description|length > 50 %}...{% endif %}</h5>
-                                        <p class="card-text">
-                                            <strong>Status:</strong> <span class="status-{{ task.status }}">{{ task.status }}</span><br>
-                                            <strong>Started:</strong> {{ task.start_time }}<br>
-                                            {% if task.end_time %}
-                                                <strong>Completed:</strong> {{ task.end_time }}<br>
-                                            {% endif %}
-                                        </p>
-                                        <a href="/task/{{ task_id }}" class="btn btn-info">View Details</a>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        {% else %}
-                            <p>No tasks submitted yet.</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
+            <h3>Final Result</h3>
+            <div id="result-container"></div>
         </div>
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // WebSocket connection
+        let socket = null;
+        let currentTaskId = null;
+        
+        // Connect to WebSocket for a specific task
+        function connectWebSocket(taskId) {
+            // Close existing connection if any
+            if (socket) {
+                socket.close();
+            }
+            
+            // Connect to new WebSocket
+            socket = new WebSocket(`ws://${window.location.host}/ws/${taskId}`);
+            
+            // Handle WebSocket events
+            socket.onopen = function(e) {
+                console.log('WebSocket connection established');
+            };
+            
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                console.log('WebSocket message received:', data);
+                
+                // Handle different message types
+                if (data.type === 'task_info') {
+                    updateTaskInfo(data.task);
+                } else if (data.type === 'task_completed') {
+                    updateTaskResult(data.result);
+                    loadTasks(); // Refresh task list
+                } else {
+                    // Agent interaction
+                    addAgentInteraction(data);
+                }
+            };
+            
+            socket.onclose = function(event) {
+                console.log('WebSocket connection closed');
+            };
+            
+            socket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+        }
+        
+        // Add agent interaction to the UI
+        function addAgentInteraction(interaction) {
+            const container = document.getElementById('agent-interactions');
+            const div = document.createElement('div');
+            div.className = `interaction ${interaction.type}`;
+            
+            let content = '';
+            
+            // Format based on interaction type
+            if (interaction.type === 'agent_start') {
+                content = `<strong>${interaction.agent}</strong> started working on: ${interaction.task}`;
+            } else if (interaction.type === 'agent_finish') {
+                content = `<strong>${interaction.agent}</strong> finished with output: <pre>${interaction.output}</pre>`;
+            } else if (interaction.type === 'agent_error') {
+                content = `<strong>${interaction.agent}</strong> encountered an error: ${interaction.error}`;
+            } else if (interaction.type === 'crew_start') {
+                content = `<strong>${interaction.crew}</strong> started working`;
+            } else if (interaction.type === 'crew_finish') {
+                content = `<strong>${interaction.crew}</strong> finished with output: <pre>${interaction.output}</pre>`;
+            } else if (interaction.type === 'crew_error') {
+                content = `<strong>${interaction.crew}</strong> encountered an error: ${interaction.error}`;
+            } else if (interaction.type === 'subtask_start') {
+                content = `<strong>${interaction.agent}</strong> started working on subtask: ${interaction.task}`;
+            } else if (interaction.type === 'subtask_finish') {
+                content = `<strong>${interaction.agent}</strong> finished subtask with output: <pre>${interaction.output}</pre>`;
+            } else if (interaction.type === 'subtask_error') {
+                content = `<strong>${interaction.agent}</strong> encountered an error in subtask: ${interaction.error}`;
+            }
+            
+            div.innerHTML = `${content}<div class="timestamp">${interaction.timestamp}</div>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight; // Auto-scroll to bottom
+        }
+        
+        // Update task info in the UI
+        function updateTaskInfo(task) {
+            const statusElement = document.getElementById('task-status');
+            statusElement.innerHTML = `
+                <h3>Task: ${task.topic}</h3>
+                <p><strong>Status:</strong> ${task.status} ${task.status === 'processing' ? '<span class="loading"></span>' : ''}</p>
+                <p><strong>Created:</strong> ${task.created_at}</p>
+                ${task.completed_at ? `<p><strong>Completed:</strong> ${task.completed_at}</p>` : ''}
+                ${task.pdf_paths && task.pdf_paths.length > 0 ? `<p><strong>PDF Files:</strong> ${task.pdf_paths.map(path => path.split('/').pop()).join(', ')}</p>` : ''}
+            `;
+            
+            // Update result if available
+            if (task.result) {
+                updateTaskResult(task.result);
+            } else {
+                document.getElementById('result-container').innerHTML = 'Waiting for results...';
+            }
+        }
+        
+        // Update task result in the UI
+        function updateTaskResult(result) {
+            const resultContainer = document.getElementById('result-container');
+            resultContainer.innerHTML = `<pre>${result}</pre>`;
+        }
+        
+        // Load tasks from the server
+        async function loadTasks() {
+            try {
+                const response = await fetch('/tasks');
+                const tasks = await response.json();
+                
+                const container = document.getElementById('task-list-container');
+                container.innerHTML = '';
+                
+                if (tasks.length === 0) {
+                    container.innerHTML = '<p>No tasks yet</p>';
+                    return;
+                }
+                
+                // Sort tasks by created_at (newest first)
+                tasks.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                
+                // Add tasks to the list
+                tasks.forEach(task => {
+                    const div = document.createElement('div');
+                    div.className = `task-item ${task.id === currentTaskId ? 'selected' : ''}`;
+                    div.innerHTML = `
+                        <strong>${task.topic}</strong>
+                        <div><small>Status: ${task.status} ${task.status === 'processing' ? '<span class="loading"></span>' : ''}</small></div>
+                        <div><small>Created: ${task.created_at}</small></div>
+                    `;
+                    div.onclick = function() {
+                        selectTask(task.id);
+                    };
+                    container.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error loading tasks:', error);
+            }
+        }
+        
+        // Select a task
+        function selectTask(taskId) {
+            // Update selected task in the UI
+            const taskItems = document.querySelectorAll('.task-item');
+            taskItems.forEach(item => {
+                item.classList.remove('selected');
+                if (item.querySelector('strong').textContent === taskId) {
+                    item.classList.add('selected');
+                }
+            });
+            
+            // Set current task ID
+            currentTaskId = taskId;
+            
+            // Clear agent interactions
+            document.getElementById('agent-interactions').innerHTML = '';
+            
+            // Connect to WebSocket for the selected task
+            connectWebSocket(taskId);
+            
+            // Load task details
+            fetch(`/task/${taskId}`)
+                .then(response => response.json())
+                .then(task => {
+                    updateTaskInfo(task);
+                })
+                .catch(error => {
+                    console.error('Error loading task details:', error);
+                });
+        }
+        
+        // Handle form submission
+        document.getElementById('task-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            try {
+                const response = await fetch('/submit-task', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.task_id) {
+                    // Select the new task
+                    selectTask(data.task_id);
+                    
+                    // Refresh task list
+                    loadTasks();
+                    
+                    // Clear form
+                    this.reset();
+                }
+            } catch (error) {
+                console.error('Error submitting task:', error);
+            }
+        });
+        
+        // Handle collapsible sections
+        const collapsibles = document.getElementsByClassName('collapsible');
+        for (let i = 0; i < collapsibles.length; i++) {
+            collapsibles[i].addEventListener('click', function() {
+                this.classList.toggle('active');
+                const content = this.nextElementSibling;
+                if (content.style.display === 'block') {
+                    content.style.display = 'none';
+                } else {
+                    content.style.display = 'block';
+                }
+            });
+        }
+        
+        // Load tasks on page load
+        window.addEventListener('load', function() {
+            loadTasks();
+        });
+    </script>
 </body>
 </html>

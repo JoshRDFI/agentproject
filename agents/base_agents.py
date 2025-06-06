@@ -1,11 +1,65 @@
+import os
 from crewai import Agent
+from crewai.tools import BaseTool
 from typing import List, Optional
-from crewai.tools import WebSearchTool
+import traceback
+
+# Set custom storage location for CrewAI memory
+os.environ["CREWAI_STORAGE_DIR"] = "./storage"
+
+# Custom DuckDuckGo search tool implementation
+class WebSearchTool(BaseTool):
+    def __init__(self):
+        try:
+            from duckduckgo_search import DDGS
+            self.ddgs = DDGS()
+            self.available = True
+        except ImportError:
+            self.available = False
+            print("DuckDuckGo search package not found. Install with: pip install duckduckgo-search")
+    
+    def name(self) -> str:
+        return "web_search"
+    
+    def description(self) -> str:
+        return "Search the web for information using DuckDuckGo"
+    
+    def run(self, query: str) -> str:
+        if not self.available:
+            return ("Web search functionality is not available. \n"
+                    "To enable web search, install additional dependencies:\n"
+                    "pip install duckduckgo-search\n")
+        
+        try:
+            results = list(self.ddgs.text(query, max_results=5))
+            if not results:
+                return f"No results found for: {query}"
+            
+            formatted_results = ""
+            for i, result in enumerate(results, 1):
+                title = result.get('title', 'No title')
+                body = result.get('body', 'No content')
+                href = result.get('href', 'No link')
+                formatted_results += f"Result {i}:\nTitle: {title}\nContent: {body}\nURL: {href}\n\n"
+            
+            return formatted_results
+        except Exception as e:
+            return f"Error performing web search: {str(e)}\n{traceback.format_exc()}"
 
 # Custom tool for PDF processing
-class PDFProcessingTool:
+class PDFProcessingTool(BaseTool):
     def __init__(self, pdf_storage_path: str = "uploads/pdfs"):
         self.pdf_storage_path = pdf_storage_path
+        # Check if required libraries are available
+        try:
+            import PyPDF2
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            from qwen_vl_utils import prepare_images_for_qwen_vl
+            self.available = True
+        except ImportError as e:
+            self.available = False
+            print(f"PDF processing dependencies not available: {e}")
+            print("Install with: pip install git+https://github.com/huggingface/transformers accelerate qwen-vl-utils PyPDF2")
         
     def name(self) -> str:
         return "pdf_processor"
@@ -14,7 +68,8 @@ class PDFProcessingTool:
         return "Extracts and analyzes text and visual content from PDF files"
     
     def run(self, pdf_path: str, query: Optional[str] = None) -> str:
-        """Process a PDF file and extract information.
+        """
+        Process a PDF file and extract information using the qwen2.5vl model.
         
         Args:
             pdf_path: Path to the PDF file
@@ -23,10 +78,90 @@ class PDFProcessingTool:
         Returns:
             Extracted information from the PDF
         """
-        # In a real implementation, this would use a PDF processing library
-        # and the qwen2.5vl:7b model to extract information from the PDF
-        # For now, we'll return a placeholder message
-        return f"Extracted information from {pdf_path}: [PDF content would be processed here using qwen2.5vl:7b model]"
+        if not self.available:
+            return ("PDF processing functionality is not available. \n"
+                    "Install required dependencies first.")
+        
+        try:
+            import os
+            import PyPDF2
+            from PIL import Image
+            import io
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            from qwen_vl_utils import prepare_images_for_qwen_vl
+            
+            # Check if the PDF exists
+            full_path = pdf_path
+            if not os.path.isabs(pdf_path):
+                full_path = os.path.join(self.pdf_storage_path, pdf_path)
+                
+            if not os.path.exists(full_path):
+                return f"Error: PDF file not found at {full_path}"
+            
+            # Extract text from PDF
+            with open(full_path, 'rb') as file:
+                reader = PyPDF2.PdfReader(file)
+                num_pages = len(reader.pages)
+                
+                # For simplicity, we'll convert the first few pages to images
+                # In a production system, you might want to process all pages
+                max_pages = min(5, num_pages)  # Limit to first 5 pages for demo
+                
+                # Load the model and tokenizer
+                model_name = "Qwen/Qwen2.5-VL-7B"
+                tokenizer = AutoTokenizer.from_pretrained(model_name)
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    device_map="auto",
+                    trust_remote_code=True
+                )
+                
+                # Process the PDF with the model
+                results = []
+                
+                for i in range(max_pages):
+                    # Convert PDF page to image
+                    page = reader.pages[i]
+                    text = page.extract_text()
+                    
+                    # Prepare prompt based on whether a query was provided
+                    if query:
+                        prompt = f"This is page {i+1} of a PDF document. Please answer the following question based on this page: {query}\n\nPage content: {text}"
+                    else:
+                        prompt = f"This is page {i+1} of a PDF document. Please extract and summarize the key information from this page.\n\nPage content: {text}"
+                    
+                    # Generate response
+                    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+                    generated_ids = model.generate(
+                        inputs.input_ids,
+                        max_new_tokens=500,
+                        do_sample=True,
+                        temperature=0.7
+                    )
+                    response = tokenizer.decode(generated_ids[0][inputs.input_ids.shape[1]:])
+                    results.append(f"Page {i+1} analysis:\n{response}\n")
+                
+                # Combine results
+                combined_result = f"Analysis of PDF: {os.path.basename(full_path)}\n\n"
+                combined_result += "\n".join(results)
+                
+                # Add a summary if there was a specific query
+                if query:
+                    summary_prompt = f"Based on the PDF document, please provide a concise answer to: {query}"
+                    inputs = tokenizer(summary_prompt, return_tensors="pt").to(model.device)
+                    generated_ids = model.generate(
+                        inputs.input_ids,
+                        max_new_tokens=300,
+                        do_sample=True,
+                        temperature=0.7
+                    )
+                    summary = tokenizer.decode(generated_ids[0][inputs.input_ids.shape[1]:])
+                    combined_result += f"\n\nSummary answer to query '{query}':\n{summary}"
+                
+                return combined_result
+                
+        except Exception as e:
+            return f"Error processing PDF: {str(e)}\n{traceback.format_exc()}"
 
 # These are agent definitions with specific roles and capabilities
 
@@ -39,7 +174,8 @@ def PDFProcessingAgent(llm_model: str = "qwen2.5vl:7b") -> Agent:
         verbose=True,
         llm=llm_model,
         tools=[PDFProcessingTool()],
-        allow_delegation=False
+        allow_delegation=False,
+        memory=True  # Enable memory for context retention
     )
 
 def WebSearchAgent(llm_model: str = "llama3") -> Agent:
@@ -51,7 +187,8 @@ def WebSearchAgent(llm_model: str = "llama3") -> Agent:
         verbose=True,
         llm=llm_model,
         tools=[WebSearchTool()],
-        allow_delegation=False
+        allow_delegation=False,
+        memory=True  # Enable memory for context retention
     )
 
 def ResearchAgent(llm_model: str = "llama3") -> Agent:
@@ -62,7 +199,8 @@ def ResearchAgent(llm_model: str = "llama3") -> Agent:
         backstory="You are an expert researcher with a talent for organizing information and identifying key insights.",
         verbose=True,
         llm=llm_model,
-        allow_delegation=True
+        allow_delegation=True,
+        memory=True  # Enable memory for context retention
     )
 
 def AnalysisAgent(llm_model: str = "llama3") -> Agent:
@@ -73,7 +211,8 @@ def AnalysisAgent(llm_model: str = "llama3") -> Agent:
         backstory="You are a skilled analyst with a background in data science and critical thinking. You excel at identifying patterns and drawing conclusions from complex information.",
         verbose=True,
         llm=llm_model,
-        allow_delegation=True
+        allow_delegation=True,
+        memory=True  # Enable memory for context retention
     )
 
 def WriterAgent(llm_model: str = "llama3") -> Agent:
@@ -84,7 +223,8 @@ def WriterAgent(llm_model: str = "llama3") -> Agent:
         backstory="You are a talented writer with experience in various styles and formats. You can transform complex information into accessible and engaging content.",
         verbose=True,
         llm=llm_model,
-        allow_delegation=True
+        allow_delegation=True,
+        memory=True  # Enable memory for context retention
     )
 
 def ManagerAgent(llm_model: str = "llama3") -> Agent:
@@ -95,5 +235,6 @@ def ManagerAgent(llm_model: str = "llama3") -> Agent:
         backstory="You are an experienced project manager with a keen eye for detail and a talent for organizing information. You excel at identifying inconsistencies and ensuring the final product meets high standards of quality and accuracy.",
         verbose=True,
         llm=llm_model,
-        allow_delegation=False
+        allow_delegation=False,
+        memory=True  # Enable memory for context retention
     )

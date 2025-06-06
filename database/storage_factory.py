@@ -1,20 +1,52 @@
-from typing import Optional, Union
-from .json_storage import JSONStorage
-from .postgres_storage import PostgresStorage
+from typing import Dict, Any, Optional, Union
+import os
+import json
+from datetime import datetime
+
+# Import storage implementations
+try:
+    from .json_storage import JSONStorage
+    from .postgres_storage import PostgresStorage
+except ImportError:
+    # For testing or when imported from a different directory
+    try:
+        from json_storage import JSONStorage
+        from postgres_storage import PostgresStorage
+    except ImportError:
+        # Define placeholder classes if imports fail
+        class JSONStorage:
+            def __init__(self, *args, **kwargs):
+                pass
+            
+            def save(self, *args, **kwargs):
+                pass
+            
+            def load(self, *args, **kwargs):
+                pass
+        
+        class PostgresStorage:
+            def __init__(self, *args, **kwargs):
+                pass
+            
+            def save(self, *args, **kwargs):
+                pass
+            
+            def load(self, *args, **kwargs):
+                pass
 
 class StorageFactory:
-    """Factory for creating storage instances based on configuration."""
+    """Factory for creating storage instances."""
     
     @staticmethod
-    def get_storage(storage_type: str = "json", **kwargs) -> Union[JSONStorage, PostgresStorage]:
-        """Get a storage instance based on the specified type.
+    def create_storage(storage_type: str = "json", **kwargs) -> Union[JSONStorage, PostgresStorage]:
+        """Create a storage instance of the specified type.
         
         Args:
-            storage_type: Type of storage to use ("json" or "postgres")
+            storage_type: The type of storage to create ("json" or "postgres")
             **kwargs: Additional arguments to pass to the storage constructor
             
         Returns:
-            Storage instance
+            A storage instance of the specified type
         """
         if storage_type.lower() == "json":
             return JSONStorage(**kwargs)
@@ -24,4 +56,4 @@ class StorageFactory:
             raise ValueError(f"Unknown storage type: {storage_type}")
 
 # Default storage instance
-default_storage = StorageFactory.get_storage("json")
+default_storage = StorageFactory.create_storage("json", storage_dir="uploads/json")

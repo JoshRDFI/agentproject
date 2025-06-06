@@ -1,65 +1,133 @@
 from crewai import Task
-from typing import List, Optional, Callable
-from crewai.agent import Agent
+from typing import List, Optional, Dict, Any
 
-# These are task definitions for different types of work
-
-def PDFProcessingTask(agent: Agent, pdf_paths: List[str], context: Optional[str] = None) -> Task:
-    """Creates a PDF processing task for extracting information from PDF files."""
-    pdf_paths_str = "\n".join([f"- {path}" for path in pdf_paths])
-    return Task(
-        description=f"Extract and analyze information from the following PDF files:\n{pdf_paths_str}\n\nContext: {context if context else 'No additional context provided.'}",
-        agent=agent,
-        expected_output="A comprehensive report with extracted information from the PDF files, including key content, insights, and relevant data."
-    )
-
-def WebSearchTask(agent: Agent, query: str, context: Optional[str] = None) -> Task:
-    """Creates a web search task for finding information on the internet."""
-    return Task(
-        description=f"Search the web for information about: {query}\n\nContext: {context if context else 'No additional context provided.'}",
-        agent=agent,
-        expected_output="A comprehensive report with relevant information from the web, including sources, key findings, and up-to-date data."
-    )
-
-def ResearchTask(agent: Agent, topic: str, context: Optional[str] = None, web_search_results: Optional[str] = None, pdf_results: Optional[str] = None) -> Task:
-    """Creates a research task for analyzing and synthesizing information."""
-    return Task(
-        description=f"Research and synthesize information on: {topic}\n\nContext: {context if context else 'No additional context provided.'}\n\n"
-                   f"Web Search Results: {web_search_results if web_search_results else 'No web search results provided.'}\n\n"
-                   f"PDF Analysis Results: {pdf_results if pdf_results else 'No PDF analysis results provided.'}",
-        agent=agent,
-        expected_output="A comprehensive research report with synthesized information, key findings, and insights."
-    )
-
-def AnalysisTask(agent: Agent, data: str, question: str, research_results: Optional[str] = None) -> Task:
-    """Creates an analysis task for analyzing data and answering a question."""
-    data_source = data
-    if research_results:
-        data_source = research_results
+def pdf_processing_task(pdf_paths: List[str], query: Optional[str] = None) -> Task:
+    """Creates a task for processing PDF files.
+    
+    Args:
+        pdf_paths: List of paths to PDF files to process
+        query: Optional query to focus the extraction on specific information
+        
+    Returns:
+        A Task object for processing PDF files
+    """
+    description = f"Extract and analyze information from the following PDF files: {', '.join(pdf_paths)}"
+    if query:
+        description += f"\nFocus on extracting information related to: {query}"
     
     return Task(
-        description=f"Analyze the following information and answer the question:\n\nInformation: {data_source}\n\nQuestion: {question}",
-        agent=agent,
-        expected_output="A detailed analysis with insights, patterns, and a clear answer to the question."
+        description=description,
+        expected_output="A comprehensive summary of the key information extracted from the PDF files, including text, tables, and visual elements.",
+        agent_description="You are a PDF Document Specialist who can extract and analyze information from PDF files.",
+        context={
+            "pdf_paths": pdf_paths,
+            "query": query
+        }
     )
 
-def WritingTask(agent: Agent, topic: str, style: str, length: str, research_results: Optional[str] = None) -> Task:
-    """Creates a writing task for producing content on a topic."""
+def web_search_task(query: str) -> Task:
+    """Creates a task for searching the web.
+    
+    Args:
+        query: The search query
+        
+    Returns:
+        A Task object for searching the web
+    """
     return Task(
-        description=f"Write content on the following topic: {topic}\n\nStyle: {style}\nLength: {length}\n\nResearch Results: {research_results if research_results else 'No research results provided.'}",
-        agent=agent,
-        expected_output=f"A well-written {length} piece in {style} style about {topic}."
+        description=f"Search the web for information about: {query}",
+        expected_output="A comprehensive summary of the most relevant and reliable information found on the web, with sources cited.",
+        agent_description="You are a Web Search Specialist who can find accurate and up-to-date information on the web.",
+        context={
+            "query": query
+        }
     )
 
-def ManagerTask(agent: Agent, topic: str, web_search_results: str, research_results: str, analysis_results: str, writing_results: str, pdf_results: Optional[str] = None) -> Task:
-    """Creates a manager task for checking information accuracy and presenting a cohesive final result."""
+def research_task(topic: str, web_search_results: Optional[str] = None, pdf_analysis: Optional[str] = None) -> Task:
+    """Creates a task for researching a topic.
+    
+    Args:
+        topic: The topic to research
+        web_search_results: Optional results from web search
+        pdf_analysis: Optional results from PDF analysis
+        
+    Returns:
+        A Task object for researching a topic
+    """
+    description = f"Research the following topic: {topic}"
+    context = {"topic": topic}
+    
+    if web_search_results:
+        description += "\nUse the following web search results as a starting point:"
+        description += f"\n{web_search_results}"
+        context["web_search_results"] = web_search_results
+    
+    if pdf_analysis:
+        description += "\nIncorporate the following PDF analysis into your research:"
+        description += f"\n{pdf_analysis}"
+        context["pdf_analysis"] = pdf_analysis
+    
     return Task(
-        description=f"Review all the information gathered about {topic} and create a final, cohesive report.\n\n"
-                   f"Web Search Results:\n{web_search_results}\n\n"
-                   f"PDF Analysis Results:\n{pdf_results if pdf_results else 'No PDF analysis results provided.'}\n\n"
-                   f"Research Results:\n{research_results}\n\n"
-                   f"Analysis Results:\n{analysis_results}\n\n"
-                   f"Writing Results:\n{writing_results}",
-        agent=agent,
-        expected_output="A comprehensive, accurate, and well-organized final report that integrates all the information gathered, highlights key insights, and presents a cohesive narrative."
+        description=description,
+        expected_output="A comprehensive research report that synthesizes information from all available sources and identifies key insights.",
+        agent_description="You are a Research Specialist who can analyze and synthesize information from various sources.",
+        context=context
+    )
+
+def analysis_task(research_report: str) -> Task:
+    """Creates a task for analyzing a research report.
+    
+    Args:
+        research_report: The research report to analyze
+        
+    Returns:
+        A Task object for analyzing a research report
+    """
+    return Task(
+        description="Analyze the following research report and identify key patterns, insights, and implications:",
+        expected_output="A detailed analysis that identifies patterns, insights, and implications from the research report.",
+        agent_description="You are a Data Analyst who can analyze information and extract meaningful insights and patterns.",
+        context={
+            "research_report": research_report
+        }
+    )
+
+def writing_task(analysis: str, topic: str) -> Task:
+    """Creates a task for writing content based on analysis.
+    
+    Args:
+        analysis: The analysis to base the writing on
+        topic: The topic of the writing
+        
+    Returns:
+        A Task object for writing content
+    """
+    return Task(
+        description=f"Create clear, engaging, and informative content on the topic of {topic} based on the following analysis:",
+        expected_output="Well-written, engaging, and informative content that effectively communicates the key insights from the analysis.",
+        agent_description="You are a Content Writer who can transform complex information into accessible and engaging content.",
+        context={
+            "analysis": analysis,
+            "topic": topic
+        }
+    )
+
+def management_task(content: str, topic: str) -> Task:
+    """Creates a task for managing and finalizing content.
+    
+    Args:
+        content: The content to manage and finalize
+        topic: The topic of the content
+        
+    Returns:
+        A Task object for managing and finalizing content
+    """
+    return Task(
+        description=f"Review, verify, and finalize the following content on the topic of {topic}:",
+        expected_output="A final, polished version of the content that is accurate, well-organized, and meets high standards of quality.",
+        agent_description="You are a Project Manager who can verify the accuracy of information and present a cohesive, well-organized final result.",
+        context={
+            "content": content,
+            "topic": topic
+        }
     )

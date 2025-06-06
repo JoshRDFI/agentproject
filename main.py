@@ -1,48 +1,75 @@
+import argparse
 import os
-import sys
-import asyncio
+import uuid
+from typing import Dict, List, Set, Any
+from crew_setup import create_crew, run_crew
 
-def run_web_interface():
-    """Run the web interface."""
-    # Add the web_interface directory to the path
-    web_interface_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web_interface")
-    sys.path.append(web_interface_dir)
+# For CLI mode
+def run_cli():
+    """Run the application in CLI mode."""
+    print("CrewAI Multi-Agent System - CLI Mode")
+    print("==================================")
     
-    # Import and run the web interface
-    from web_interface.main import app
-    import uvicorn
+    # Get topic from user
+    topic = input("Enter a topic to research: ")
     
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
-
-async def run_cli_async():
-    """Run the CLI interface asynchronously."""
-    from crew_setup import run_crew_async
+    # Ask if user wants to process PDF files
+    process_pdfs = input("Do you want to process PDF files? (y/n): ").lower() == 'y'
+    pdf_paths = []
     
-    print("Welcome to the CrewAI Task Manager CLI!")
-    print("Enter your task description below:")
+    if process_pdfs:
+        # Create uploads/pdfs directory if it doesn't exist
+        os.makedirs("uploads/pdfs", exist_ok=True)
+        
+        # Get PDF file paths from user
+        print("Enter the paths to the PDF files (one per line, empty line to finish):")
+        while True:
+            pdf_path = input("PDF path: ")
+            if not pdf_path:
+                break
+            if os.path.exists(pdf_path):
+                # Copy the file to uploads/pdfs
+                filename = os.path.basename(pdf_path)
+                destination = os.path.join("uploads/pdfs", filename)
+                with open(pdf_path, "rb") as src, open(destination, "wb") as dst:
+                    dst.write(src.read())
+                pdf_paths.append(destination)
+            else:
+                print(f"File not found: {pdf_path}")
     
-    task_description = input("> ")
+    # Generate a task ID
+    task_id = str(uuid.uuid4())
     
-    print("\nProcessing your task...\n")
+    # Create and run the crew
+    print(f"\nCreating crew for task {task_id}...")
+    crew = create_crew(task_id, topic, pdf_paths, callback_enabled=False)
     
-    result = await run_crew_async(task_description)
+    print("\nRunning crew...")
+    result = run_crew(crew, task_id)
     
-    print("\nTask Result:")
+    print("\nResult:")
+    print("=======\n")
     print(result)
 
-def run_cli():
-    """Run the CLI interface."""
-    asyncio.run(run_cli_async())
+# For web mode (import and run the FastAPI app)
+def run_web():
+    """Run the application in web mode."""
+    try:
+        from web_interface.main import app
+        import uvicorn
+        print("Starting web interface...")
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    except ImportError:
+        print("Error: FastAPI or uvicorn not installed. Please install them with:")
+        print("pip install fastapi uvicorn")
 
+# Main entry point
 if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Run the CrewAI Task Manager")
-    parser.add_argument("--cli", action="store_true", help="Run the CLI interface instead of the web interface")
-    
+    parser = argparse.ArgumentParser(description="CrewAI Multi-Agent System")
+    parser.add_argument("--cli", action="store_true", help="Run in CLI mode")
     args = parser.parse_args()
     
     if args.cli:
         run_cli()
     else:
-        run_web_interface()
+        run_web()
