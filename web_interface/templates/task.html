@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task Details - CrewAI Web Interface</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+        }
+        .status-running {
+            color: blue;
+        }
+        .status-completed {
+            color: green;
+        }
+        .status-failed {
+            color: red;
+        }
+        .agent-interaction {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .agent-start {
+            background-color: #f8f9fa;
+            border-left: 5px solid #6c757d;
+        }
+        .agent-finish {
+            background-color: #e9f7ef;
+            border-left: 5px solid #28a745;
+        }
+        .agent-error {
+            background-color: #f8d7da;
+            border-left: 5px solid #dc3545;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .file-list {
+            margin-top: 20px;
+        }
+        .file-item {
+            padding: 10px;
+            margin-bottom: 5px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .pdf-file {
+            border-left: 5px solid #fd7e14;
+        }
+        .clarification-file {
+            border-left: 5px solid #6610f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">Task Details</h1>
+        
+        {% if message %}
+        <div class="alert alert-success">
+            {{ message }}
+        </div>
+        {% endif %}
+        
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h2>Task Information</h2>
+                    </div>
+                    <div class="card-body">
+                        <h5>Description:</h5>
+                        <pre>{{ task.description }}</pre>
+                        
+                        <h5>Status: <span class="status-{{ task.status }}">{{ task.status }}</span></h5>
+                        
+                        <p>
+                            <strong>Started:</strong> {{ task.start_time }}<br>
+                            {% if task.end_time %}
+                                <strong>Completed:</strong> {{ task.end_time }}<br>
+                            {% endif %}
+                        </p>
+                        
+                        {% if task.clarifications %}
+                            <h5>Clarifications:</h5>
+                            <ul>
+                                {% for clarification in task.clarifications %}
+                                    <li>{{ clarification }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                        
+                        {% if task.status == "completed" or task.status == "failed" %}
+                            <h5>Result:</h5>
+                            <pre>{{ task.result }}</pre>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if uploaded_files %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h2>Uploaded Files</h2>
+                    </div>
+                    <div class="card-body file-list">
+                        {% for file in uploaded_files %}
+                            <div class="file-item {% if file.filename.endswith('.pdf') %}pdf-file{% endif %} {% if file.clarification %}clarification-file{% endif %}">
+                                <strong>{{ file.filename }}</strong>
+                                <p>
+                                    Type: {{ file.content_type }}<br>
+                                    Size: {{ (file.size / 1024)|round(2) }} KB
+                                    {% if file.clarification %}
+                                    <br><span class="badge bg-primary">Added with clarification</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h2>Agent Interactions</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="accordion" id="agentInteractionsAccordion">
+                            {% for interaction in agent_interactions %}
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="heading{{ loop.index }}">
+                                        <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" aria-expanded="{% if loop.first %}true{% else %}false{% endif %}" aria-controls="collapse{{ loop.index }}">
+                                            {{ interaction.timestamp }} - {{ interaction.agent }} ({{ interaction.type }})
+                                        </button>
+                                    </h2>
+                                    <div id="collapse{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#agentInteractionsAccordion">
+                                        <div class="accordion-body">
+                                            <div class="agent-interaction {% if interaction.type == 'agent_start' %}agent-start{% elif interaction.type == 'agent_finish' %}agent-finish{% elif interaction.type == 'agent_error' %}agent-error{% endif %}">
+                                                {% if interaction.type == 'agent_start' %}
+                                                    <h5>{{ interaction.agent }} started:</h5>
+                                                    <p>{{ interaction.task }}</p>
+                                                {% elif interaction.type == 'agent_finish' %}
+                                                    <h5>{{ interaction.agent }} finished:</h5>
+                                                    <pre>{{ interaction.output }}</pre>
+                                                {% elif interaction.type == 'agent_error' %}
+                                                    <h5>{{ interaction.agent }} encountered an error:</h5>
+                                                    <pre>{{ interaction.error }}</pre>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <p>No agent interactions recorded yet.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Add Clarification</h2>
+                    </div>
+                    <div class="card-body">
+                        <form action="/clarify/{{ task_id }}" method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="clarification" class="form-label">Clarification:</label>
+                                <textarea class="form-control" id="clarification" name="clarification" rows="5" required></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="files" class="form-label">Additional PDF Files (Optional):</label>
+                                <input class="form-control" type="file" id="files" name="files" multiple accept=".pdf,application/pdf">
+                                <div class="form-text">You can upload additional PDF files for the agents to analyze.</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Submit Clarification</button>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <a href="/" class="btn btn-secondary">Back to Home</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // WebSocket connection for real-time updates
+        const socket = new WebSocket(`ws://${window.location.host}/ws/{{ task_id }}`);
+        
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'task_complete' || data.type === 'task_error') {
+                // Reload the page to show the final result
+                window.location.reload();
+            } else {
+                // For agent interactions, we could update the UI dynamically
+                // For simplicity, we'll just reload the page
+                window.location.reload();
+            }
+        };
+        
+        socket.onclose = function(event) {
+            console.log('WebSocket connection closed');
+        };
+    </script>
+</body>
+</html>
