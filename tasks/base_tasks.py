@@ -18,7 +18,6 @@ def pdf_processing_task(pdf_paths: List[str], query: Optional[str] = None) -> Ta
     return Task(
         description=description,
         expected_output="A comprehensive summary of the key information extracted from the PDF files, including text, tables, and visual elements.",
-        agent_description="You are a PDF Document Specialist who can extract and analyze information from PDF files.",
         context={
             "pdf_paths": pdf_paths,
             "query": query
@@ -37,10 +36,7 @@ def web_search_task(query: str) -> Task:
     return Task(
         description=f"Search the web for information about: {query}",
         expected_output="A comprehensive summary of the most relevant and reliable information found on the web, with sources cited.",
-        agent_description="You are a Web Search Specialist who can find accurate and up-to-date information on the web.",
-        context={
-            "query": query
-        }
+        context=[query]
     )
 
 def research_task(topic: str, web_search_results: Optional[str] = None, pdf_analysis: Optional[str] = None) -> Task:
@@ -70,7 +66,6 @@ def research_task(topic: str, web_search_results: Optional[str] = None, pdf_anal
     return Task(
         description=description,
         expected_output="A comprehensive research report that synthesizes information from all available sources and identifies key insights.",
-        agent_description="You are a Research Specialist who can analyze and synthesize information from various sources.",
         context=context
     )
 
@@ -86,7 +81,6 @@ def analysis_task(research_report: str) -> Task:
     return Task(
         description="Analyze the following research report and identify key patterns, insights, and implications:",
         expected_output="A detailed analysis that identifies patterns, insights, and implications from the research report.",
-        agent_description="You are a Data Analyst who can analyze information and extract meaningful insights and patterns.",
         context={
             "research_report": research_report
         }
@@ -105,7 +99,6 @@ def writing_task(analysis: str, topic: str) -> Task:
     return Task(
         description=f"Create clear, engaging, and informative content on the topic of {topic} based on the following analysis:",
         expected_output="Well-written, engaging, and informative content that effectively communicates the key insights from the analysis.",
-        agent_description="You are a Content Writer who can transform complex information into accessible and engaging content.",
         context={
             "analysis": analysis,
             "topic": topic
@@ -125,7 +118,6 @@ def management_task(content: str, topic: str) -> Task:
     return Task(
         description=f"Review, verify, and finalize the following content on the topic of {topic}:",
         expected_output="A final, polished version of the content that is accurate, well-organized, and meets high standards of quality.",
-        agent_description="You are a Project Manager who can verify the accuracy of information and present a cohesive, well-organized final result.",
         context={
             "content": content,
             "topic": topic

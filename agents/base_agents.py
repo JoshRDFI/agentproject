@@ -1,73 +1,46 @@
 import os
+import traceback
+from typing import List, Optional, Type
+
 from crewai import Agent
 from crewai.tools import BaseTool
-from typing import List, Optional
-import traceback
+from crewai_tools.llms import ChatOllama
 
 # Set custom storage location for CrewAI memory
 os.environ["CREWAI_STORAGE_DIR"] = "./storage"
 
 # Custom DuckDuckGo search tool implementation
+from langchain_community.tools import DuckDuckGoSearchRun
+
 class WebSearchTool(BaseTool):
-    def __init__(self):
-        try:
-            from duckduckgo_search import DDGS
-            self.ddgs = DDGS()
-            self.available = True
-        except ImportError:
-            self.available = False
-            print("DuckDuckGo search package not found. Install with: pip install duckduckgo-search")
-    
-    def name(self) -> str:
-        return "web_search"
-    
-    def description(self) -> str:
-        return "Search the web for information using DuckDuckGo"
-    
-    def run(self, query: str) -> str:
-        if not self.available:
-            return ("Web search functionality is not available. \n"
-                    "To enable web search, install additional dependencies:\n"
-                    "pip install duckduckgo-search\n")
-        
-        try:
-            results = list(self.ddgs.text(query, max_results=5))
-            if not results:
-                return f"No results found for: {query}"
-            
-            formatted_results = ""
-            for i, result in enumerate(results, 1):
-                title = result.get('title', 'No title')
-                body = result.get('body', 'No content')
-                href = result.get('href', 'No link')
-                formatted_results += f"Result {i}:\nTitle: {title}\nContent: {body}\nURL: {href}\n\n"
-            
-            return formatted_results
-        except Exception as e:
-            return f"Error performing web search: {str(e)}\n{traceback.format_exc()}"
+    name: str = "web_search"
+    description: str = "Search the web for information using DuckDuckGo"
+
+    def _run(self, query: str) -> str:
+        duckduckgo_tool = DuckDuckGoSearchRun()
+        response = duckduckgo_tool.invoke(query)
+        return response
+
 
 # Custom tool for PDF processing
 class PDFProcessingTool(BaseTool):
-    def __init__(self, pdf_storage_path: str = "uploads/pdfs"):
-        self.pdf_storage_path = pdf_storage_path
+    name: str = "pdf_processor"
+    description: str = "Extracts and analyzes text and visual content from PDF files"
+    
+    def __init__(self):
+        super().__init__()
+        self._pdf_storage_path = "uploads/pdfs"
         # Check if required libraries are available
         try:
             import PyPDF2
             from transformers import AutoModelForCausalLM, AutoTokenizer
-            from qwen_vl_utils import prepare_images_for_qwen_vl
             self.available = True
         except ImportError as e:
             self.available = False
             print(f"PDF processing dependencies not available: {e}")
-            print("Install with: pip install git+https://github.com/huggingface/transformers accelerate qwen-vl-utils PyPDF2")
-        
-    def name(self) -> str:
-        return "pdf_processor"
-        
-    def description(self) -> str:
-        return "Extracts and analyzes text and visual content from PDF files"
+            print("Install with: pip install transformers accelerate PyPDF2")
     
-    def run(self, pdf_path: str, query: Optional[str] = None) -> str:
+    def _run(self, pdf_path: str, query: Optional[str] = None) -> str:
         """
         Process a PDF file and extract information using the qwen2.5vl model.
         
@@ -88,12 +61,11 @@ class PDFProcessingTool(BaseTool):
             from PIL import Image
             import io
             from transformers import AutoModelForCausalLM, AutoTokenizer
-            from qwen_vl_utils import prepare_images_for_qwen_vl
             
             # Check if the PDF exists
             full_path = pdf_path
             if not os.path.isabs(pdf_path):
-                full_path = os.path.join(self.pdf_storage_path, pdf_path)
+                full_path = os.path.join(self._pdf_storage_path, pdf_path)
                 
             if not os.path.exists(full_path):
                 return f"Error: PDF file not found at {full_path}"
@@ -103,8 +75,7 @@ class PDFProcessingTool(BaseTool):
                 reader = PyPDF2.PdfReader(file)
                 num_pages = len(reader.pages)
                 
-                # For simplicity, we'll convert the first few pages to images
-                # In a production system, you might want to process all pages
+                # For simplicity, we'll process just the first few pages
                 max_pages = min(5, num_pages)  # Limit to first 5 pages for demo
                 
                 # Load the model and tokenizer
@@ -120,7 +91,7 @@ class PDFProcessingTool(BaseTool):
                 results = []
                 
                 for i in range(max_pages):
-                    # Convert PDF page to image
+                    # Extract text from page
                     page = reader.pages[i]
                     text = page.extract_text()
                     
@@ -167,12 +138,13 @@ class PDFProcessingTool(BaseTool):
 
 def PDFProcessingAgent(llm_model: str = "qwen2.5vl:7b") -> Agent:
     """Creates a PDF processing agent that can extract and analyze information from PDF files."""
+    llm = ChatOllama(model=llm_model)
     return Agent(
         role="PDF Document Specialist",
         goal="Extract and analyze information from PDF documents accurately and comprehensively",
         backstory="You are an expert in document analysis with a specialty in PDF processing. You can extract text, understand tables, and interpret visual elements in documents.",
         verbose=True,
-        llm=llm_model,
+        llm=llm,
         tools=[PDFProcessingTool()],
         allow_delegation=False,
         memory=True  # Enable memory for context retention
@@ -180,12 +152,13 @@ def PDFProcessingAgent(llm_model: str = "qwen2.5vl:7b") -> Agent:
 
 def WebSearchAgent(llm_model: str = "llama3") -> Agent:
     """Creates a web search agent that can find information on the internet."""
+    llm = ChatOllama(model=llm_model)
     return Agent(
         role="Web Search Specialist",
         goal="Find accurate and up-to-date information on the web about the given topic",
         backstory="You are an expert web researcher with a talent for finding the most relevant and reliable information online.",
         verbose=True,
-        llm=llm_model,
+        llm=llm,
         tools=[WebSearchTool()],
         allow_delegation=False,
         memory=True  # Enable memory for context retention
@@ -193,48 +166,52 @@ def WebSearchAgent(llm_model: str = "llama3") -> Agent:
 
 def ResearchAgent(llm_model: str = "llama3") -> Agent:
     """Creates a research agent that can analyze and synthesize information."""
+    llm = ChatOllama(model=llm_model)
     return Agent(
         role="Research Specialist",
         goal="Analyze and synthesize information to create a comprehensive research report",
         backstory="You are an expert researcher with a talent for organizing information and identifying key insights.",
         verbose=True,
-        llm=llm_model,
+        llm=llm,
         allow_delegation=True,
         memory=True  # Enable memory for context retention
     )
 
 def AnalysisAgent(llm_model: str = "llama3") -> Agent:
     """Creates an analysis agent that can analyze information and draw insights."""
+    llm = ChatOllama(model=llm_model)
     return Agent(
         role="Data Analyst",
         goal="Analyze information and extract meaningful insights and patterns",
         backstory="You are a skilled analyst with a background in data science and critical thinking. You excel at identifying patterns and drawing conclusions from complex information.",
         verbose=True,
-        llm=llm_model,
+        llm=llm,
         allow_delegation=True,
         memory=True  # Enable memory for context retention
     )
 
 def WriterAgent(llm_model: str = "llama3") -> Agent:
     """Creates a writer agent that can produce well-written content."""
+    llm = ChatOllama(model=llm_model)
     return Agent(
         role="Content Writer",
         goal="Create clear, engaging, and informative content based on research and analysis",
         backstory="You are a talented writer with experience in various styles and formats. You can transform complex information into accessible and engaging content.",
         verbose=True,
-        llm=llm_model,
+        llm=llm,
         allow_delegation=True,
         memory=True  # Enable memory for context retention
     )
 
 def ManagerAgent(llm_model: str = "llama3") -> Agent:
     """Creates a manager agent that checks information for accuracy and presents a cohesive final result."""
+    llm = ChatOllama(model=llm_model)
     return Agent(
         role="Project Manager",
         goal="Verify the accuracy of information and present a cohesive, well-organized final result",
         backstory="You are an experienced project manager with a keen eye for detail and a talent for organizing information. You excel at identifying inconsistencies and ensuring the final product meets high standards of quality and accuracy.",
         verbose=True,
-        llm=llm_model,
+        llm=llm,
         allow_delegation=False,
         memory=True  # Enable memory for context retention
     )

@@ -23,9 +23,8 @@ app.mount("/static", StaticFiles(directory="web_interface/static"), name="static
 # Set up templates
 templates = Jinja2Templates(directory="web_interface/templates")
 
-# Store WebSocket connections and agent interactions
+# Store WebSocket connections and task information
 connections: Dict[str, Set[WebSocket]] = {}
-agent_interactions: Dict[str, List[Dict]] = {}
 tasks: Dict[str, Dict] = {}
 
 # Create uploads directories if they don't exist
@@ -114,11 +113,6 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
         connections[task_id] = set()
     connections[task_id].add(websocket)
     
-    # Send existing interactions if available
-    if task_id in agent_interactions:
-        for interaction in agent_interactions[task_id]:
-            await websocket.send_json(interaction)
-    
     # Send task information if available
     if task_id in tasks:
         await websocket.send_json({"type": "task_info", "task": tasks[task_id]})
@@ -145,7 +139,7 @@ async def process_task(task_id: str, topic: str, pdf_paths: List[str]):
     tasks[task_id]["status"] = "processing"
     
     # Create and run the crew
-    crew = create_crew(task_id, topic, pdf_paths, connections, agent_interactions)
+    crew = create_crew(task_id, topic, pdf_paths)
     
     # Run the crew in a separate thread to avoid blocking the event loop
     loop = asyncio.get_event_loop()

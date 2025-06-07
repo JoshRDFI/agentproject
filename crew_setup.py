@@ -1,4 +1,4 @@
-from crewai import Crew, Process
+from crewai import Agent, Crew, Process, Task
 from typing import List, Optional, Dict, Any
 from agents.base_agents import (
     PDFProcessingAgent, WebSearchAgent, ResearchAgent,
@@ -8,40 +8,37 @@ from tasks.base_tasks import (
     pdf_processing_task, web_search_task, research_task,
     analysis_task, writing_task, management_task
 )
-from callbacks import AgentInteractionCallback
 
-def create_crew(task_id: str, topic: str, pdf_paths: List[str] = None, 
-               connections: Dict[str, Any] = None, agent_interactions: Dict[str, List[Dict]] = None,
-               callback_enabled: bool = True) -> Crew:
+def create_crew(task_id: str, topic: str, pdf_paths: List[str] = None) -> Crew:
     """Creates a crew of agents for processing a task.
     
     Args:
         task_id: The ID of the task
         topic: The topic to research
         pdf_paths: Optional list of paths to PDF files to process
-        connections: Optional dictionary of WebSocket connections for real-time updates
-        agent_interactions: Optional dictionary to store agent interactions
-        callback_enabled: Whether to enable callbacks for real-time updates
         
     Returns:
         A Crew object with the specified agents and tasks
     """
     # Initialize agents with specific LLMs
-    pdf_agent = PDFProcessingAgent(llm_model="qwen2.5vl:7b")
-    web_agent = WebSearchAgent(llm_model="llama3")
-    research_agent = ResearchAgent(llm_model="llama3")
-    analysis_agent = AnalysisAgent(llm_model="llama3")
-    writer_agent = WriterAgent(llm_model="llama3")
-    manager_agent = ManagerAgent(llm_model="llama3")
+    web_agent = WebSearchAgent(llm_model="llama3.2:latest")
+    research_agent = ResearchAgent(llm_model="deepseek-r1:8b")
+    analysis_agent = AnalysisAgent(llm_model="deepseek-r1:8b")
+    writer_agent = WriterAgent(llm_model="llama3.2:latest")
+    manager_agent = ManagerAgent(llm_model="llama3.2:latest")
+    
+    # Create a list of agents for the crew
+    agents = [web_agent, research_agent, analysis_agent, writer_agent, manager_agent]
     
     # Create tasks
     tasks = []
     
     # Add PDF processing task if PDF paths are provided
-    pdf_analysis = None
     if pdf_paths and len(pdf_paths) > 0:
+        pdf_agent = PDFProcessingAgent(llm_model="qwen2.5-7b")
         pdf_task = pdf_processing_task(pdf_paths=pdf_paths, query=topic)
         tasks.append((pdf_agent, pdf_task))
+        agents.append(pdf_agent)
     
     # Add web search task
     web_task = web_search_task(query=topic)
@@ -62,23 +59,16 @@ def create_crew(task_id: str, topic: str, pdf_paths: List[str] = None,
     # Add management task
     management_task_obj = management_task(content="", topic=topic)
     tasks.append((manager_agent, management_task_obj))
-    
-    # Create callback if enabled
-    callback = None
-    if callback_enabled and connections is not None and agent_interactions is not None:
-        if task_id not in agent_interactions:
-            agent_interactions[task_id] = []
-        callback = AgentInteractionCallback(task_id, connections, agent_interactions)
+    tasks.append((manager_agent, management_task_obj))
     
     # Create crew
     crew = Crew(
-        agents=[pdf_agent, web_agent, research_agent, analysis_agent, writer_agent, manager_agent],
+        agents=agents,
         tasks=[task for _, task in tasks],
         verbose=2,  # Increased verbosity for more detailed logs
         process=Process.sequential,  # Sequential process for predictable flow
         memory=True,  # Enable memory for the crew
-        manager_llm="llama3",  # Use llama3 for the crew manager
-        callback=callback  # Add callback for real-time updates
+        manager_llm="llama3"  # Use llama3 for the crew manager
     )
     
     return crew

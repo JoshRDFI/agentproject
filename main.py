@@ -42,7 +42,7 @@ def run_cli():
     
     # Create and run the crew
     print(f"\nCreating crew for task {task_id}...")
-    crew = create_crew(task_id, topic, pdf_paths, callback_enabled=False)
+    crew = create_crew(task_id, topic, pdf_paths)
     
     print("\nRunning crew...")
     result = run_crew(crew, task_id)
@@ -58,7 +58,7 @@ def run_web():
         from web_interface.main import app
         import uvicorn
         print("Starting web interface...")
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        uvicorn.run(app, host="localhost", port=8088)
     except ImportError:
         print("Error: FastAPI or uvicorn not installed. Please install them with:")
         print("pip install fastapi uvicorn")
