@@ -5,6 +5,7 @@ from fastapi.templating import Jinja2Templates
 import os
 import uuid
 import asyncio
+import requests
 from typing import Dict, List, Set, Any, Optional
 import json
 from datetime import datetime
@@ -13,9 +14,41 @@ from datetime import datetime
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from crew_setup import create_crew, run_crew
+from check_crewai_version import check_crewai_version
+
+# Check crewai version
+if not check_crewai_version():
+    print("Please upgrade crewai and try again.")
+    sys.exit(1)
 
 # Create FastAPI app
 app = FastAPI(title="CrewAI Multi-Agent System")
+
+# Check if Ollama server is running
+try:
+    response = requests.get("http://localhost:11434/api/tags")
+    if response.status_code == 200:
+        print("Ollama server is running. Available models:")
+        models = response.json().get("models", [])
+        model_names = [model['name'] for model in models]
+        for model in models:
+            print(f"- {model['name']}")
+            
+        # Check if required models are available
+        required_models = ["llama3.2", "deepseek-r1", "qwen2.5vl"]
+        missing_models = [model for model in required_models if not any(model in m for m in model_names)]
+        if missing_models:
+            print("\nWarning: The following required models are not available in Ollama:")
+            for model in missing_models:
+                print(f"- {model}")
+            print("\nYou can pull these models using the following commands:")
+            for model in missing_models:
+                print(f"ollama pull {model}")
+    else:
+        print("Ollama server is running but returned an unexpected response.")
+except requests.exceptions.ConnectionError:
+    print("Warning: Could not connect to Ollama server at http://localhost:11434.")
+    print("Make sure Ollama is running for the agents to work properly.")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="web_interface/static"), name="static")
@@ -26,6 +59,7 @@ templates = Jinja2Templates(directory="web_interface/templates")
 # Store WebSocket connections and task information
 connections: Dict[str, Set[WebSocket]] = {}
 tasks: Dict[str, Dict] = {}
+agent_interactions: Dict[str, List[Dict]] = {}
 
 # Create uploads directories if they don't exist
 os.makedirs("uploads/pdfs", exist_ok=True)
@@ -138,27 +172,54 @@ async def process_task(task_id: str, topic: str, pdf_paths: List[str]):
     # Update task status
     tasks[task_id]["status"] = "processing"
     
-    # Create and run the crew
-    crew = create_crew(task_id, topic, pdf_paths)
-    
-    # Run the crew in a separate thread to avoid blocking the event loop
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, lambda: run_crew(crew, task_id))
-    
-    # Update task status and result
-    tasks[task_id]["status"] = "completed"
-    tasks[task_id]["result"] = result
-    tasks[task_id]["completed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    # Notify connected clients
-    if task_id in connections:
-        for connection in connections[task_id]:
-            try:
-                await connection.send_json({
-                    "type": "task_completed",
-                    "task_id": task_id,
-                    "result": result
-                })
-            except Exception:
-                # If sending fails, we'll just continue with the other connections
-                pass
+    try:
+        # Initialize agent_interactions for this task
+        if task_id not in agent_interactions:
+            agent_interactions[task_id] = []
+        
+        # Create the crew
+        print(f"Creating crew for task {task_id} on topic: {topic}")
+        crew = create_crew(task_id, topic, pdf_paths)
+        print(f"Crew created with {len(crew.agents)} agents and {len(crew.tasks)} tasks")
+        
+        # Run the crew in a separate thread to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, lambda: run_crew(crew, task_id, connections, agent_interactions))
+        
+        # Update task status and result
+        tasks[task_id]["status"] = "completed"
+        tasks[task_id]["result"] = result
+        tasks[task_id]["completed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Notify connected clients
+        if task_id in connections:
+            for connection in connections[task_id]:
+                try:
+                    await connection.send_json({
+                        "type": "task_completed",
+                        "task_id": task_id,
+                        "result": result
+                    })
+                except Exception as e:
+                    print(f"Error sending completion notification: {str(e)}")
+    except Exception as e:
+        error_message = f"Error processing task {task_id}: {str(e)}"
+        print(error_message)
+        import traceback
+        print(traceback.format_exc())
+        
+        # Update task status to error
+        tasks[task_id]["status"] = "error"
+        tasks[task_id]["error"] = error_message
+        
+        # Notify connected clients of the error
+        if task_id in connections:
+            for connection in connections[task_id]:
+                try:
+                    await connection.send_json({
+                        "type": "task_error",
+                        "task_id": task_id,
+                        "error": error_message
+                    })
+                except Exception:
+                    pass

@@ -1,9 +1,8 @@
-from crewai.callbacks import CrewCallbackHandler
 from datetime import datetime
 from typing import Dict, List, Set, Any, Optional
 import asyncio
 
-class AgentInteractionCallback(CrewCallbackHandler):
+class AgentInteractionCallback:
     """Custom callback handler for tracking agent interactions.
     
     This callback handler captures agent start, finish, and error events,
@@ -18,7 +17,6 @@ class AgentInteractionCallback(CrewCallbackHandler):
             connections: Dictionary mapping task IDs to sets of WebSocket connections
             agent_interactions: Dictionary mapping task IDs to lists of agent interactions
         """
-        super().__init__()
         self.task_id = task_id
         self.connections = connections
         self.agent_interactions = agent_interactions
@@ -219,6 +217,19 @@ class AgentInteractionCallback(CrewCallbackHandler):
             loop.run_until_complete(self._broadcast(interaction))
             loop.close()
     
+    async def _broadcast(self, interaction: Dict[str, Any]) -> None:
+        """Broadcast an interaction to all connected WebSocket clients.
+        
+        Args:
+            interaction: The interaction to broadcast
+        """
+        if self.task_id in self.connections:
+            for connection in self.connections[self.task_id]:
+                try:
+                    await connection.send_json(interaction)
+                except Exception as e:
+                    print(f"Error broadcasting to WebSocket: {str(e)}")
+    
     async def on_crew_error(self, crew: Any, error: Exception) -> None:
         """Called when a crew encounters an error.
         
@@ -378,12 +389,22 @@ class AgentInteractionCallback(CrewCallbackHandler):
             loop.run_until_complete(self._broadcast(interaction))
             loop.close()
     
-    def on_task_complete(self, output: Any) -> None:
+    async def on_task_complete(self, output: Any) -> None:
         """Called when a task is completed.
         
         Args:
             output: The output of the task
         """
+        interaction = {
+            "type": "task_complete",
+            "output": str(output),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        self.agent_interactions[self.task_id].append(interaction)
+        await self._broadcast(interaction)
+        
+    def on_task_complete_sync(self, output: Any) -> None:
+        """Synchronous version of on_task_complete."""
         interaction = {
             "type": "task_complete",
             "output": str(output),
@@ -431,17 +452,3 @@ class AgentInteractionCallback(CrewCallbackHandler):
             asyncio.set_event_loop(loop)
             loop.run_until_complete(self._broadcast(interaction))
             loop.close()
-            
-    async def _broadcast(self, message: Dict) -> None:
-        """Broadcast a message to all connected WebSocket clients for this task.
-        
-        Args:
-            message: The message to broadcast
-        """
-        if self.task_id in self.connections:
-            for connection in self.connections[self.task_id]:
-                try:
-                    await connection.send_json(message)
-                except Exception:
-                    # If sending fails, we'll just continue with the other connections
-                    pass

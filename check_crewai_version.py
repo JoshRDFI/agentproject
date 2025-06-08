@@ -1,36 +1,24 @@
 import pkg_resources
-import inspect
+import sys
 
-try:
-    version = pkg_resources.get_distribution('crewai').version
-    print(f'CrewAI version: {version}')
-    
-    # Check for available modules
-    import crewai
-    print('\nAvailable modules in crewai:')
-    for name in dir(crewai):
-        if not name.startswith('_'):
-            print(f'- {name}')
-    
-    # Check for available tools
+def check_crewai_version():
+    """Check if the installed crewai version is compatible."""
     try:
-        from crewai import tools
-        print('\nAvailable tools in crewai.tools:')
-        for name, obj in inspect.getmembers(tools):
-            if not name.startswith('_'):
-                print(f'- {name}')
-                
-        # Check for search tools
-        try:
-            from crewai.tools import search
-            print('\nAvailable search tools:')
-            for name, obj in inspect.getmembers(search):
-                if not name.startswith('_'):
-                    print(f'- {name}')
-        except ImportError:
-            print('\nNo separate search module found')
-    except ImportError:
-        print('\nNo tools module found')
+        crewai_version = pkg_resources.get_distribution("crewai").version
+        print(f"Installed crewai version: {crewai_version}")
         
-except pkg_resources.DistributionNotFound:
-    print('CrewAI is not installed')
+        # For this project, we're adapting to work with version 0.126.0
+        # So we'll return True regardless of version, but print a notice
+        if crewai_version != "0.126.0":
+            print(f"Note: This project is adapted to work with CrewAI version 0.126.0.")
+            print(f"You're using version {crewai_version}, which may cause compatibility issues.")
+        
+        return True
+    except pkg_resources.DistributionNotFound:
+        print("Error: crewai package is not installed.")
+        print("Please install it with: pip install crewai")
+        return False
+
+if __name__ == "__main__":
+    if not check_crewai_version():
+        sys.exit(1)

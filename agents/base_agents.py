@@ -4,7 +4,6 @@ from typing import List, Optional, Type
 
 from crewai import Agent
 from crewai.tools import BaseTool
-from crewai_tools.llms import ChatOllama
 
 # Set custom storage location for CrewAI memory
 os.environ["CREWAI_STORAGE_DIR"] = "./storage"
@@ -136,9 +135,8 @@ class PDFProcessingTool(BaseTool):
 
 # These are agent definitions with specific roles and capabilities
 
-def PDFProcessingAgent(llm_model: str = "qwen2.5vl:7b") -> Agent:
+def PDFProcessingAgent(llm) -> Agent:
     """Creates a PDF processing agent that can extract and analyze information from PDF files."""
-    llm = ChatOllama(model=llm_model)
     return Agent(
         role="PDF Document Specialist",
         goal="Extract and analyze information from PDF documents accurately and comprehensively",
@@ -150,9 +148,8 @@ def PDFProcessingAgent(llm_model: str = "qwen2.5vl:7b") -> Agent:
         memory=True  # Enable memory for context retention
     )
 
-def WebSearchAgent(llm_model: str = "llama3") -> Agent:
+def WebSearchAgent(llm) -> Agent:
     """Creates a web search agent that can find information on the internet."""
-    llm = ChatOllama(model=llm_model)
     return Agent(
         role="Web Search Specialist",
         goal="Find accurate and up-to-date information on the web about the given topic",
@@ -164,9 +161,8 @@ def WebSearchAgent(llm_model: str = "llama3") -> Agent:
         memory=True  # Enable memory for context retention
     )
 
-def ResearchAgent(llm_model: str = "llama3") -> Agent:
+def ResearchAgent(llm) -> Agent:
     """Creates a research agent that can analyze and synthesize information."""
-    llm = ChatOllama(model=llm_model)
     return Agent(
         role="Research Specialist",
         goal="Analyze and synthesize information to create a comprehensive research report",
@@ -177,9 +173,8 @@ def ResearchAgent(llm_model: str = "llama3") -> Agent:
         memory=True  # Enable memory for context retention
     )
 
-def AnalysisAgent(llm_model: str = "llama3") -> Agent:
+def AnalysisAgent(llm) -> Agent:
     """Creates an analysis agent that can analyze information and draw insights."""
-    llm = ChatOllama(model=llm_model)
     return Agent(
         role="Data Analyst",
         goal="Analyze information and extract meaningful insights and patterns",
@@ -190,9 +185,8 @@ def AnalysisAgent(llm_model: str = "llama3") -> Agent:
         memory=True  # Enable memory for context retention
     )
 
-def WriterAgent(llm_model: str = "llama3") -> Agent:
+def WriterAgent(llm) -> Agent:
     """Creates a writer agent that can produce well-written content."""
-    llm = ChatOllama(model=llm_model)
     return Agent(
         role="Content Writer",
         goal="Create clear, engaging, and informative content based on research and analysis",
@@ -203,9 +197,8 @@ def WriterAgent(llm_model: str = "llama3") -> Agent:
         memory=True  # Enable memory for context retention
     )
 
-def ManagerAgent(llm_model: str = "llama3") -> Agent:
+def ManagerAgent(llm) -> Agent:
     """Creates a manager agent that checks information for accuracy and presents a cohesive final result."""
-    llm = ChatOllama(model=llm_model)
     return Agent(
         role="Project Manager",
         goal="Verify the accuracy of information and present a cohesive, well-organized final result",

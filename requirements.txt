@@ -1,5 +1,5 @@
 # Core dependencies
-crewai==0.126.0
+crewai>=0.28.0
 # Install tools separately after core installation
 # crewai[tools]
 fastapi==0.115.0
@@ -9,8 +9,12 @@ jinja2==3.1.2
 aiofiles==23.2.1
 websockets==12.0
 
-# Search tools
+# LLM dependencies
+litellm>=1.0.0
+langchain
 langchain-community
+
+# Search tools
 duckduckgo-search==4.1.1
 
 # PDF processing
